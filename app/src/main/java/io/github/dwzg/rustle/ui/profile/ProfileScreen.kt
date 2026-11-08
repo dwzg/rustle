@@ -32,10 +32,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.dwzg.rustle.course.Course
-import io.github.dwzg.rustle.data.Achievements
-import io.github.dwzg.rustle.data.Levels
-import io.github.dwzg.rustle.data.Progress
+import io.github.dwzg.rustle.core.Achievement
+import io.github.dwzg.rustle.core.Stats
+import io.github.dwzg.rustle.course.fraction
 import io.github.dwzg.rustle.ui.components.Ferris
 import io.github.dwzg.rustle.ui.components.FerrisMood
 import io.github.dwzg.rustle.ui.components.XpBar
@@ -43,15 +42,15 @@ import io.github.dwzg.rustle.ui.theme.Brand
 
 @Composable
 fun ProfileScreen(
-    course: Course,
-    progress: Progress,
-    today: Long,
+    stats: Stats,
+    achievements: List<Achievement>,
+    unlockAll: Boolean,
     onUnlockAll: (Boolean) -> Unit,
     onReset: () -> Unit,
     contentPadding: PaddingValues,
 ) {
-    val level = Levels.of(progress.xp)
-    val unlocked = Achievements.unlocked(progress, course)
+    val level = stats.level
+    val unlocked = achievements.count { it.unlocked }
     var confirmReset by remember { mutableStateOf(false) }
 
     Column(
@@ -69,28 +68,28 @@ fun ProfileScreen(
             Spacer(Modifier.height(10.dp))
             XpBar(level.fraction, Modifier.fillMaxWidth(0.8f))
             Text(
-                "${progress.xp} XP total · ${level.span - level.into} XP to level ${level.level + 1}",
+                "${stats.xp} XP total · ${level.span - level.into} XP to level ${level.level + 1}",
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 6.dp),
             )
         }
 
-        val accuracy = if (progress.answered == 0) "–" else "${progress.answeredCorrect * 100 / progress.answered}%"
+        val accuracy = stats.accuracy?.let { "$it%" } ?: "–"
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Stat("🔥", "${progress.currentStreak(today)}", "streak", Modifier.weight(1f))
-            Stat("🏆", "${progress.bestStreak}", "best streak", Modifier.weight(1f))
+            Stat("🔥", "${stats.streak}", "streak", Modifier.weight(1f))
+            Stat("🏆", "${stats.bestStreak}", "best streak", Modifier.weight(1f))
             Stat("🎯", accuracy, "accuracy", Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Stat("📘", "${progress.completedCount}/${course.lessons.size}", "lessons", Modifier.weight(1f))
-            Stat("⭐", "${progress.perfectCount}", "perfect", Modifier.weight(1f))
-            Stat("⚡", "${progress.rushBest}", "rush best", Modifier.weight(1f))
+            Stat("📘", "${stats.lessonsDone}/${stats.lessonsTotal}", "lessons", Modifier.weight(1f))
+            Stat("⭐", "${stats.perfect}", "perfect", Modifier.weight(1f))
+            Stat("⚡", "${stats.rushBest}", "rush best", Modifier.weight(1f))
         }
 
-        Text("Achievements  ${unlocked.size}/${Achievements.all.size}", style = MaterialTheme.typography.titleLarge)
-        Achievements.all.forEach { a ->
-            val got = a.id in unlocked
+        Text("Achievements  $unlocked/${achievements.size}", style = MaterialTheme.typography.titleLarge)
+        achievements.forEach { a ->
+            val got = a.unlocked
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -122,7 +121,7 @@ fun ProfileScreen(
                 Text("Explorer mode", fontWeight = FontWeight.ExtraBold)
                 Text("Unlock every lesson, for those who already know some Rust", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Switch(checked = progress.unlockAll, onCheckedChange = onUnlockAll)
+            Switch(checked = unlockAll, onCheckedChange = onUnlockAll)
         }
         TextButton(onClick = { confirmReset = true }) {
             Text("Reset all progress", color = MaterialTheme.colorScheme.error)

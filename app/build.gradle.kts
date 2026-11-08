@@ -5,16 +5,74 @@ plugins {
     alias(libs.plugins.roborazzi)
 }
 
+// ---- Rust core (../core) ------------------------------------------------
+// The course parser, grading and progress rules are written in Rust. These
+// tasks build it for Android (via cargo-ndk), for the JVM unit tests (host
+// build), and generate the Kotlin bindings with UniFFI.
+val coreDir = rootProject.file("core")
+val rustJniLibs = layout.buildDirectory.dir("rustJniLibs")
+val uniffiOut = layout.buildDirectory.dir("generated/uniffi")
+val hostLibDir = coreDir.resolve("target/release")
+val hostLib = hostLibDir.resolve(
+    when {
+        org.gradle.internal.os.OperatingSystem.current().isMacOsX -> "librustle_core.dylib"
+        org.gradle.internal.os.OperatingSystem.current().isWindows -> "rustle_core.dll"
+        else -> "librustle_core.so"
+    }
+)
+
+fun Exec.rustInputs() {
+    inputs.dir(coreDir.resolve("src"))
+    inputs.files(coreDir.resolve("Cargo.toml"), coreDir.resolve("Cargo.lock"), coreDir.resolve("uniffi.toml"))
+    workingDir = coreDir
+}
+
+val cargoBuildHost by tasks.registering(Exec::class) {
+    description = "Builds the Rust core for this machine (bindings + unit tests)."
+    rustInputs()
+    outputs.file(hostLib)
+    commandLine("cargo", "build", "--release", "--lib")
+}
+
+val generateUniffiBindings by tasks.registering(Exec::class) {
+    description = "Generates Kotlin bindings for the Rust core."
+    dependsOn(cargoBuildHost)
+    rustInputs()
+    outputs.dir(uniffiOut)
+    doFirst { delete(uniffiOut) }
+    commandLine(
+        "cargo", "run", "--release", "--features", "bindgen", "--bin", "uniffi-bindgen", "--",
+        "generate", "--library", hostLib.absolutePath, "--language", "kotlin",
+        "--no-format", "--out-dir", uniffiOut.get().asFile.absolutePath,
+    )
+}
+
+val cargoBuildAndroid by tasks.registering(Exec::class) {
+    description = "Builds the Rust core for Android devices and emulators."
+    rustInputs()
+    outputs.dir(rustJniLibs)
+    doFirst { environment("ANDROID_NDK_HOME", android.ndkDirectory.absolutePath) }
+    commandLine(
+        "cargo", "ndk", "-t", "arm64-v8a", "-t", "armeabi-v7a", "-t", "x86_64",
+        "-o", rustJniLibs.get().asFile.absolutePath, "build", "--release", "--lib",
+    )
+}
+
+tasks.named("preBuild") { dependsOn(generateUniffiBindings, cargoBuildAndroid) }
+
 android {
     namespace = "io.github.dwzg.rustle"
     compileSdk = 36
+    ndkVersion = "30.0.16248370"
 
     defaultConfig {
         applicationId = "io.github.dwzg.rustle"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
+        // Must match the targets the Rust core is built for (cargoBuildAndroid).
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
     }
 
     buildTypes {
@@ -33,6 +91,12 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+    sourceSets {
+        getByName("main") {
+            java.srcDir(uniffiOut)
+            jniLibs.srcDir(rustJniLibs)
+        }
     }
     testOptions {
         unitTests {
@@ -59,13 +123,18 @@ val prepareRobolectric by tasks.registering(Copy::class) {
 }
 
 tasks.withType<Test>().configureEach {
-    dependsOn(prepareRobolectric)
+    dependsOn(prepareRobolectric, cargoBuildHost)
+    // Lets JNA find the host build of the Rust core.
+    systemProperty("jna.library.path", hostLibDir.absolutePath)
     systemProperty("robolectric.offline", "true")
     systemProperty("robolectric.dependency.dir", layout.buildDirectory.dir("robolectric-jars").get().asFile.absolutePath)
 }
 
 dependencies {
     robolectricRuntime(libs.robolectric.android.all)
+
+    implementation(libs.jna) { artifact { type = "aar" } }
+    testImplementation(libs.jna)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

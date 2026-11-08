@@ -53,16 +53,11 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.dwzg.rustle.course.Answer
-import io.github.dwzg.rustle.course.BugStep
-import io.github.dwzg.rustle.course.ChoiceStep
-import io.github.dwzg.rustle.course.CompilesStep
-import io.github.dwzg.rustle.course.Exercise
-import io.github.dwzg.rustle.course.ExplainStep
-import io.github.dwzg.rustle.course.FillStep
-import io.github.dwzg.rustle.course.Grader
-import io.github.dwzg.rustle.course.OrderStep
-import io.github.dwzg.rustle.course.Step
+import io.github.dwzg.rustle.core.Answer
+import io.github.dwzg.rustle.core.Step
+import io.github.dwzg.rustle.core.StepContent
+import io.github.dwzg.rustle.core.solution
+import io.github.dwzg.rustle.course.isExercise
 import io.github.dwzg.rustle.ui.components.ChunkyButton
 import io.github.dwzg.rustle.ui.components.Ferris
 import io.github.dwzg.rustle.ui.components.FerrisMood
@@ -114,7 +109,7 @@ fun LessonScreen(
                             .verticalScroll(rememberScrollState())
                             .padding(horizontal = 20.dp, vertical = 12.dp),
                     ) {
-                        val isRetry = step is Exercise && session.queue.take(index).any { it.key == step.key }
+                        val isRetry = step.isExercise && session.queue.take(index).any { it.key == step.key }
                         if (isRetry) {
                             RetryBadge()
                             Spacer(Modifier.height(10.dp))
@@ -190,13 +185,13 @@ private fun TopBar(session: LessonSession, onClose: () -> Unit) {
 
 @Composable
 private fun StepContent(step: Step, feedback: Feedback?, onAnswer: (Answer?) -> Unit) {
-    when (step) {
-        is ExplainStep -> ExplainView(step)
-        is ChoiceStep -> ChoiceView(step, feedback, onAnswer)
-        is FillStep -> FillView(step, feedback, onAnswer)
-        is OrderStep -> OrderView(step, feedback, onAnswer)
-        is CompilesStep -> CompilesView(step, feedback, onAnswer)
-        is BugStep -> BugView(step, feedback, onAnswer)
+    when (val c = step.content) {
+        is StepContent.Explain -> ExplainView(step, c)
+        is StepContent.Choice -> ChoiceView(step, c, feedback, onAnswer)
+        is StepContent.Fill -> FillView(step, c, feedback, onAnswer)
+        is StepContent.Order -> OrderView(step, c, feedback, onAnswer)
+        is StepContent.Compiles -> CompilesView(step, c, feedback, onAnswer)
+        is StepContent.Bug -> BugView(step, c, feedback, onAnswer)
     }
 }
 
@@ -215,7 +210,7 @@ private fun BottomArea(
     ) { fb ->
         if (fb == null) {
             Box(Modifier.fillMaxWidth().padding(20.dp)) {
-                if (step is ExplainStep) {
+                if (step != null && !step.isExercise) {
                     ChunkyButton("Got it", onClick = onContinue, modifier = Modifier.fillMaxWidth())
                 } else {
                     ChunkyButton("Check", onClick = onCheck, enabled = canCheck, modifier = Modifier.fillMaxWidth())
@@ -247,12 +242,12 @@ private fun FeedbackPanel(fb: Feedback, onContinue: () -> Unit) {
             Spacer(Modifier.width(10.dp))
             Text(headline, style = MaterialTheme.typography.titleLarge, color = accent)
         }
-        if (!fb.correct && fb.step !is OrderStep) {
+        if (!fb.correct && fb.step.content !is StepContent.Order) {
             Text(
-                "Answer: " + Grader.solution(fb.step),
+                "Answer: " + solution(fb.step),
                 color = fg,
                 fontWeight = FontWeight.Bold,
-                fontFamily = if (fb.step is FillStep || fb.step is BugStep) FontFamily.Monospace else null,
+                fontFamily = if (fb.step.content is StepContent.Fill || fb.step.content is StepContent.Bug) FontFamily.Monospace else null,
             )
         }
         Column(Modifier.verticalScroll(rememberScrollState()).weight(1f, fill = false)) {

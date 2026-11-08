@@ -60,11 +60,14 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.dwzg.rustle.course.Course
-import io.github.dwzg.rustle.course.CourseUnit
-import io.github.dwzg.rustle.course.Lesson
-import io.github.dwzg.rustle.data.Levels
-import io.github.dwzg.rustle.data.Progress
+import io.github.dwzg.rustle.core.Course
+import io.github.dwzg.rustle.core.CourseUnit
+import io.github.dwzg.rustle.core.Lesson
+import io.github.dwzg.rustle.core.LessonState
+import io.github.dwzg.rustle.core.LessonStatus
+import io.github.dwzg.rustle.core.Stats
+import io.github.dwzg.rustle.course.exerciseCount
+import io.github.dwzg.rustle.course.fraction
 import io.github.dwzg.rustle.ui.components.ChunkyButton
 import io.github.dwzg.rustle.ui.components.Ferris
 import io.github.dwzg.rustle.ui.components.FerrisMood
@@ -94,8 +97,9 @@ private sealed interface PathItem {
 @Composable
 fun PathScreen(
     course: Course,
-    progress: Progress,
-    today: Long,
+    stats: Stats,
+    /** Lesson id -> state, computed by the Rust core. */
+    statuses: Map<String, LessonStatus>,
     onStartLesson: (Lesson) -> Unit,
     onPractice: () -> Unit,
     canPractice: Boolean,
@@ -110,7 +114,7 @@ fun PathScreen(
             }
         }
     }
-    val next = progress.nextLesson(course)
+    val next = course.units.flatMap { it.lessons }.firstOrNull { statuses[it.id]?.state == LessonState.CURRENT }
     val listState = rememberLazyListState()
     var scrolled by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(next?.id) {
@@ -129,22 +133,18 @@ fun PathScreen(
             bottom = contentPadding.calculateBottomPadding() + 32.dp,
         ),
     ) {
-        item { StatsHeader(progress, today, canPractice, onPractice) }
+        item { StatsHeader(stats, canPractice, onPractice) }
         items(items, key = { if (it is PathItem.Header) "u-${it.unit.id}" else "l-${(it as PathItem.Node).lesson.id}" }) { item ->
             when (item) {
-                is PathItem.Header -> UnitHeader(item.unit, item.index, progress)
+                is PathItem.Header -> UnitHeader(item.unit, item.index, statuses)
                 is PathItem.Node -> {
                     val lesson = item.lesson
                     LessonNode(
                         lesson = lesson,
                         position = item.position,
                         palette = UnitPalettes[item.unitIndex % UnitPalettes.size],
-                        state = when {
-                            progress.isCompleted(lesson.id) -> NodeState.Done
-                            progress.isUnlocked(course, lesson.id) -> if (lesson.id == next?.id) NodeState.Current else NodeState.Open
-                            else -> NodeState.Locked
-                        },
-                        stars = progress.stars[lesson.id] ?: 0,
+                        state = statuses[lesson.id]?.state ?: LessonState.LOCKED,
+                        stars = statuses[lesson.id]?.stars ?: 0,
                         onClick = { sheetLesson = lesson },
                     )
                 }
@@ -166,8 +166,8 @@ fun PathScreen(
     }
 
     sheetLesson?.let { lesson ->
-        val unlocked = progress.isUnlocked(course, lesson.id) || progress.isCompleted(lesson.id)
-        val unit = course.unitOf(lesson.id)
+        val unlocked = statuses[lesson.id]?.state != LessonState.LOCKED
+        val unit = course.units.firstOrNull { u -> u.lessons.any { it.id == lesson.id } }
         ModalBottomSheet(
             onDismissRequest = { sheetLesson = null },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -182,7 +182,7 @@ fun PathScreen(
                 )
                 Text(lesson.title, style = MaterialTheme.typography.headlineMedium)
                 Spacer(Modifier.height(6.dp))
-                val stars = progress.stars[lesson.id]
+                val stars = statuses[lesson.id]?.stars?.takeIf { it > 0 }
                 Text(
                     buildString {
                         append("${lesson.exerciseCount} exercises")
@@ -213,10 +213,11 @@ fun PathScreen(
 }
 
 @Composable
-private fun StatsHeader(progress: Progress, today: Long, canPractice: Boolean, onPractice: () -> Unit) {
-    val level = Levels.of(progress.xp)
-    val streak = progress.currentStreak(today)
-    val todayXp = progress.xpTodayOn(today)
+private fun StatsHeader(stats: Stats, canPractice: Boolean, onPractice: () -> Unit) {
+    val level = stats.level
+    val streak = stats.streak
+    val todayXp = stats.xpToday
+    val goal = stats.dailyGoal
     Column(
         Modifier
             .fillMaxWidth()
@@ -226,7 +227,7 @@ private fun StatsHeader(progress: Progress, today: Long, canPractice: Boolean, o
             .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Ferris(size = 64.dp, mood = if (todayXp >= Progress.DAILY_GOAL) FerrisMood.Party else FerrisMood.Happy)
+            Ferris(size = 64.dp, mood = if (todayXp >= goal) FerrisMood.Party else FerrisMood.Happy)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text("Level ${level.level}", style = MaterialTheme.typography.titleLarge)
@@ -242,18 +243,18 @@ private fun StatsHeader(progress: Progress, today: Long, canPractice: Boolean, o
         }
         Spacer(Modifier.height(12.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            DailyGoalRing(todayXp.toFloat() / Progress.DAILY_GOAL)
+            DailyGoalRing(todayXp.toFloat() / goal)
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text("Daily goal", fontWeight = FontWeight.Bold)
                 Text(
-                    if (todayXp >= Progress.DAILY_GOAL) "Done for today! 🎉" else "$todayXp / ${Progress.DAILY_GOAL} XP",
+                    if (todayXp >= goal) "Done for today! 🎉" else "$todayXp / $goal XP",
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             if (canPractice) {
-                val mistakes = progress.mistakes.size
+                val mistakes = stats.mistakes
                 ChunkyButton(
                     if (mistakes > 0) "Practice ($mistakes)" else "Practice",
                     onClick = onPractice,
@@ -279,9 +280,9 @@ private fun DailyGoalRing(fraction: Float) {
 }
 
 @Composable
-private fun UnitHeader(unit: CourseUnit, index: Int, progress: Progress) {
+private fun UnitHeader(unit: CourseUnit, index: Int, statuses: Map<String, LessonStatus>) {
     val (a, b) = UnitPalettes[index % UnitPalettes.size]
-    val done = unit.lessons.count { progress.isCompleted(it.id) }
+    val done = unit.lessons.count { statuses[it.id]?.state == LessonState.DONE }
     Row(
         Modifier
             .fillMaxWidth()
@@ -310,14 +311,12 @@ private fun UnitHeader(unit: CourseUnit, index: Int, progress: Progress) {
     }
 }
 
-enum class NodeState { Done, Current, Open, Locked }
-
 @Composable
 private fun LessonNode(
     lesson: Lesson,
     position: Int,
     palette: Pair<Color, Color>,
-    state: NodeState,
+    state: LessonState,
     stars: Int,
     onClick: () -> Unit,
 ) {
@@ -327,13 +326,13 @@ private fun LessonNode(
     val ring by pulse.animateFloat(1f, 1.18f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "ring")
     val locked = RustleTheme.colors.locked
     val face = when (state) {
-        NodeState.Locked -> locked
-        NodeState.Done -> Brand.Gold
+        LessonState.LOCKED -> locked
+        LessonState.DONE -> Brand.Gold
         else -> palette.first
     }
     val shadow = when (state) {
-        NodeState.Locked -> MaterialTheme.colorScheme.outlineVariant
-        NodeState.Done -> Color(0xFFB98500)
+        LessonState.LOCKED -> MaterialTheme.colorScheme.outlineVariant
+        LessonState.DONE -> Color(0xFFB98500)
         else -> Color(palette.first.red * 0.62f, palette.first.green * 0.62f, palette.first.blue * 0.62f)
     }
     BoxWithConstraints(Modifier.fillMaxWidth().height(128.dp)) {
@@ -345,7 +344,7 @@ private fun LessonNode(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.size(84.dp)) {
-                if (state == NodeState.Current) {
+                if (state == LessonState.CURRENT) {
                     Box(
                         Modifier
                             .size(78.dp)
@@ -365,10 +364,10 @@ private fun LessonNode(
                     contentAlignment = Alignment.Center,
                 ) {
                     when (state) {
-                        NodeState.Locked -> Icon(Icons.Rounded.Lock, "Locked", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        NodeState.Done -> Icon(Icons.Rounded.Star, "Completed", tint = Color.White, modifier = Modifier.size(36.dp))
-                        NodeState.Current -> Text("🦀", fontSize = 30.sp)
-                        NodeState.Open -> Text("▶", fontSize = 24.sp, color = Color.White)
+                        LessonState.LOCKED -> Icon(Icons.Rounded.Lock, "Locked", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        LessonState.DONE -> Icon(Icons.Rounded.Star, "Completed", tint = Color.White, modifier = Modifier.size(36.dp))
+                        LessonState.CURRENT -> Text("🦀", fontSize = 30.sp)
+                        LessonState.OPEN -> Text("▶", fontSize = 24.sp, color = Color.White)
                     }
                 }
             }
@@ -378,10 +377,10 @@ private fun LessonNode(
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
-                color = if (state == NodeState.Locked) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                color = if (state == LessonState.LOCKED) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.fillMaxWidth(),
             )
-            if (state == NodeState.Done) {
+            if (state == LessonState.DONE) {
                 Text(
                     "★".repeat(stars) + "☆".repeat(3 - stars),
                     color = Brand.Gold,

@@ -34,7 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.dwzg.rustle.ui.Reward
+import io.github.dwzg.rustle.core.Reward
 import io.github.dwzg.rustle.ui.components.ChunkyButton
 import io.github.dwzg.rustle.ui.components.Confetti
 import io.github.dwzg.rustle.ui.components.Ferris

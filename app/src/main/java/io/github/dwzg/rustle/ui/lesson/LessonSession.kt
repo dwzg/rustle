@@ -6,12 +6,12 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
-import io.github.dwzg.rustle.course.Answer
-import io.github.dwzg.rustle.course.Exercise
-import io.github.dwzg.rustle.course.Grader
-import io.github.dwzg.rustle.course.Step
+import io.github.dwzg.rustle.core.Answer
+import io.github.dwzg.rustle.core.Step
+import io.github.dwzg.rustle.core.isCorrect
+import io.github.dwzg.rustle.course.isExercise
 
-data class Feedback(val correct: Boolean, val step: Exercise, val answer: Answer)
+data class Feedback(val correct: Boolean, val step: Step, val answer: Answer)
 
 /**
  * Drives one run through a list of steps. Exercises answered wrongly are queued
@@ -40,9 +40,9 @@ class LessonSession(steps: List<Step>) : ViewModel() {
         get() = if (queue.isEmpty()) 1f else (index + if (feedback != null) 1 else 0).toFloat() / queue.size
 
     fun check(answer: Answer): Boolean {
-        val step = current as? Exercise ?: return false
-        if (feedback != null) return feedback!!.correct
-        val ok = Grader.isCorrect(step, answer)
+        val step = current?.takeIf { it.isExercise } ?: return false
+        feedback?.let { return it.correct }
+        val ok = isCorrect(step, answer)
         firstTry.putIfAbsent(step.key, ok)
         if (ok) {
             combo++

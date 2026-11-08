@@ -20,6 +20,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -27,8 +28,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import io.github.dwzg.rustle.course.CompilesStep
-import io.github.dwzg.rustle.course.Step
+import io.github.dwzg.rustle.core.Progress
+import io.github.dwzg.rustle.core.Reward
+import io.github.dwzg.rustle.core.Step
 import io.github.dwzg.rustle.ui.lesson.LessonScreen
 import io.github.dwzg.rustle.ui.lesson.LessonSession
 import io.github.dwzg.rustle.ui.lesson.ResultScreen
@@ -50,8 +52,8 @@ enum class Tab(val label: String, val icon: ImageVector) {
 /** Full-screen flows shown on top of the tabs. */
 sealed interface Overlay {
     data class Session(val runId: Long, val title: String, val steps: List<Step>, val lessonId: String?) : Overlay
-    data class Rush(val runId: Long, val deck: List<CompilesStep>) : Overlay
-    data class Result(val reward: Reward, val headline: String, val missed: List<CompilesStep>? = null) : Overlay
+    data class Rush(val runId: Long, val deck: List<Step>) : Overlay
+    data class Result(val reward: Reward, val headline: String, val missed: List<Step>? = null) : Overlay
 }
 
 /** Navigation state, kept in a ViewModel so it survives rotation. */
@@ -119,7 +121,9 @@ fun RustleApp(app: AppState) {
 }
 
 @Composable
-private fun Tabs(app: AppState, nav: NavState, progress: io.github.dwzg.rustle.data.Progress, today: Long) {
+private fun Tabs(app: AppState, nav: NavState, progress: Progress, today: Long) {
+    val engine = app.engine
+    val stats = remember(progress, today) { engine.stats(progress, today) }
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
@@ -143,9 +147,9 @@ private fun Tabs(app: AppState, nav: NavState, progress: io.github.dwzg.rustle.d
         when (nav.tab) {
             Tab.Learn -> PathScreen(
                 course = app.course,
-                progress = progress,
-                today = today,
-                canPractice = app.canPractice(progress),
+                stats = stats,
+                statuses = remember(progress) { engine.lessonStatuses(progress).associateBy { it.lessonId } },
+                canPractice = remember(progress) { engine.canPractice(progress) },
                 onStartLesson = { lesson ->
                     nav.overlay = Overlay.Session(System.nanoTime(), lesson.title, lesson.steps, lesson.id)
                 },
@@ -156,8 +160,8 @@ private fun Tabs(app: AppState, nav: NavState, progress: io.github.dwzg.rustle.d
                 contentPadding = padding,
             )
             Tab.Rush -> RushIntro(
-                best = progress.rushBest,
-                games = progress.rushGames,
+                best = stats.rushBest,
+                games = stats.rushGames,
                 onStart = { nav.overlay = Overlay.Rush(System.nanoTime(), app.rushDeck(progress)) },
                 contentPadding = padding,
             )
@@ -168,9 +172,9 @@ private fun Tabs(app: AppState, nav: NavState, progress: io.github.dwzg.rustle.d
                 contentPadding = padding,
             )
             Tab.Profile -> ProfileScreen(
-                course = app.course,
-                progress = progress,
-                today = today,
+                stats = stats,
+                achievements = remember(progress) { engine.achievements(progress) },
+                unlockAll = progress.unlockAll,
                 onUnlockAll = app::setUnlockAll,
                 onReset = app::reset,
                 contentPadding = padding,

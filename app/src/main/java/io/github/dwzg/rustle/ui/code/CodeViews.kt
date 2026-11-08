@@ -27,8 +27,10 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import io.github.dwzg.rustle.course.FillStep
 import io.github.dwzg.rustle.ui.theme.CodeTextStyle
+
+/** Marks a blank in fill-in-the-blank code (same marker as the course files). */
+const val BLANK = "___"
 
 private val PanelShape = RoundedCornerShape(16.dp)
 
@@ -128,7 +130,7 @@ fun FillCodeBlock(
                         textAlign = TextAlign.End,
                         modifier = Modifier.width(34.dp).padding(end = 10.dp),
                     )
-                    val parts = line.split(FillStep.BLANK)
+                    val parts = line.split(BLANK)
                     parts.forEachIndexed { p, part ->
                         if (part.isNotEmpty()) {
                             Text(RustHighlighter.highlight(part), style = CodeTextStyle, softWrap = false)

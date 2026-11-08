@@ -56,7 +56,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.dwzg.rustle.course.CompilesStep
+import io.github.dwzg.rustle.core.Step
+import io.github.dwzg.rustle.core.StepContent
+import io.github.dwzg.rustle.core.rushMultiplier
+import io.github.dwzg.rustle.core.rushPoints
 import io.github.dwzg.rustle.ui.code.CodeBlock
 import io.github.dwzg.rustle.ui.components.ChunkyButton
 import io.github.dwzg.rustle.ui.components.Ferris
@@ -72,12 +75,7 @@ import kotlin.math.abs
 const val RUSH_SECONDS = 45f
 private const val PENALTY_SECONDS = 3f
 
-data class RushResult(val score: Int, val correct: Int, val answered: Int, val bestCombo: Int, val missed: List<CompilesStep>)
-
-object RushScoring {
-    fun multiplier(combo: Int) = (1 + combo / 3).coerceAtMost(4)
-    fun points(combo: Int) = 100 * multiplier(combo)
-}
+data class RushResult(val score: Int, val correct: Int, val answered: Int, val bestCombo: Int, val missed: List<Step>)
 
 /** Landing page of the Rush tab. */
 @Composable
@@ -138,7 +136,7 @@ private fun Rule(icon: String, text: String) {
 }
 
 @Composable
-fun RushGame(deck: List<CompilesStep>, onQuit: () -> Unit, onFinish: (RushResult) -> Unit) {
+fun RushGame(deck: List<Step>, onQuit: () -> Unit, onFinish: (RushResult) -> Unit) {
     var timeLeft by remember { mutableFloatStateOf(RUSH_SECONDS) }
     var score by remember { mutableIntStateOf(0) }
     var combo by remember { mutableIntStateOf(0) }
@@ -148,7 +146,7 @@ fun RushGame(deck: List<CompilesStep>, onQuit: () -> Unit, onFinish: (RushResult
     var cardIndex by remember { mutableIntStateOf(0) }
     var flash by remember { mutableStateOf<Boolean?>(null) }
     var penaltyShown by remember { mutableIntStateOf(0) }
-    val missed = remember { mutableStateListOf<CompilesStep>() }
+    val missed = remember { mutableStateListOf<Step>() }
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val dragX = remember { Animatable(0f) }
@@ -166,13 +164,14 @@ fun RushGame(deck: List<CompilesStep>, onQuit: () -> Unit, onFinish: (RushResult
     }
 
     val card = deck[cardIndex % deck.size]
+    val cardContent = card.content as StepContent.Compiles
 
     fun answer(compiles: Boolean) {
         if (done || flash != null) return
         answered++
-        val ok = compiles == card.compiles
+        val ok = compiles == cardContent.compiles
         if (ok) {
-            score += RushScoring.points(combo)
+            score += rushPoints(combo)
             combo++
             bestCombo = maxOf(bestCombo, combo)
             correct++
@@ -240,7 +239,7 @@ fun RushGame(deck: List<CompilesStep>, onQuit: () -> Unit, onFinish: (RushResult
             Spacer(Modifier.weight(1f))
             if (combo >= 2) Text("🔥$combo  ", color = Brand.Flame, fontWeight = FontWeight.Black, fontSize = 18.sp)
             Text(
-                "×${RushScoring.multiplier(combo)}",
+                "×${rushMultiplier(combo)}",
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Black,
                 fontSize = 22.sp,
@@ -280,7 +279,7 @@ fun RushGame(deck: List<CompilesStep>, onQuit: () -> Unit, onFinish: (RushResult
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(8.dp))
-                Box(Modifier.verticalScroll(rememberScrollState())) { CodeBlock(card.code) }
+                Box(Modifier.verticalScroll(rememberScrollState())) { CodeBlock(cardContent.code) }
             }
             if (flash == false) {
                 Text("−${PENALTY_SECONDS.toInt()}s", color = c.error, fontWeight = FontWeight.Black, fontSize = 28.sp, modifier = Modifier.align(Alignment.TopCenter))
@@ -311,7 +310,7 @@ fun RushGame(deck: List<CompilesStep>, onQuit: () -> Unit, onFinish: (RushResult
 
 /** Review list of missed cards shown on the results screen. */
 @Composable
-fun MissedCards(missed: List<CompilesStep>) {
+fun MissedCards(missed: List<Step>) {
     if (missed.isEmpty()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Ferris(size = 40.dp, mood = FerrisMood.Party)
@@ -323,6 +322,7 @@ fun MissedCards(missed: List<CompilesStep>) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
         Text("Review your misses", style = MaterialTheme.typography.titleMedium)
         missed.take(5).forEach { step ->
+            val c = step.content as StepContent.Compiles
             Column(
                 Modifier
                     .fillMaxWidth()
@@ -331,11 +331,11 @@ fun MissedCards(missed: List<CompilesStep>) {
                     .padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                CodeBlock(step.code)
+                CodeBlock(c.code)
                 Text(
-                    if (step.compiles) "✅ It compiles" else "💥 Compile error",
+                    if (c.compiles) "✅ It compiles" else "💥 Compile error",
                     fontWeight = FontWeight.ExtraBold,
-                    color = if (step.compiles) RustleTheme.colors.success else RustleTheme.colors.error,
+                    color = if (c.compiles) RustleTheme.colors.success else RustleTheme.colors.error,
                 )
                 Text(inlineMarkdown(step.explanation), style = MaterialTheme.typography.bodyMedium)
             }

@@ -10,13 +10,10 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.test.core.app.ApplicationProvider
-import io.github.dwzg.rustle.course.Answer
-import io.github.dwzg.rustle.course.BugStep
-import io.github.dwzg.rustle.course.ChoiceStep
-import io.github.dwzg.rustle.course.CompilesStep
-import io.github.dwzg.rustle.course.Exercise
-import io.github.dwzg.rustle.course.FillStep
-import io.github.dwzg.rustle.course.OrderStep
+import io.github.dwzg.rustle.CourseContentTest.Companion.correctAnswer
+import io.github.dwzg.rustle.CourseContentTest.Companion.lessons
+import io.github.dwzg.rustle.core.StepContent
+import io.github.dwzg.rustle.course.exerciseCount
 import io.github.dwzg.rustle.data.ProgressStore
 import io.github.dwzg.rustle.ui.AppState
 import io.github.dwzg.rustle.ui.RustleApp
@@ -40,15 +37,8 @@ class FlowTest {
     @get:Rule
     val compose = createComposeRule()
 
-    private val course = CourseContentTest.loadCourse()
-
-    private fun correct(step: Exercise): Answer = when (step) {
-        is ChoiceStep -> Answer.Choice(step.answer)
-        is FillStep -> Answer.Blanks(step.answers)
-        is OrderStep -> Answer.Order(step.lines)
-        is CompilesStep -> Answer.Compiles(step.compiles)
-        is BugStep -> Answer.Line(step.bugLine)
-    }
+    private val engine = CourseContentTest.loadEngine()
+    private val course = engine.course()
 
     /** Renders every step of every lesson (plus its feedback panel) to catch UI crashes on any content. */
     @Test
@@ -62,9 +52,10 @@ class FlowTest {
             compose.runOnIdle { session = LessonSession(lesson.steps) }
             compose.waitForIdle()
             while (!session.finished) {
-                val step = session.current
-                if (step is Exercise) {
-                    compose.runOnIdle { assertTrue(step.key, session.check(correct(step))) }
+                val step = session.current!!
+                val answer = correctAnswer(step)
+                if (answer != null) {
+                    compose.runOnIdle { assertTrue(step.key, session.check(answer)) }
                     compose.waitForIdle()
                     compose.onNodeWithText("CONTINUE").assertIsDisplayed()
                 }
@@ -81,7 +72,7 @@ class FlowTest {
     @Test
     fun appSmoke() {
         val ctx = ApplicationProvider.getApplicationContext<android.app.Application>()
-        val app = AppState(course, ProgressStore(ctx).also { it.reset() })
+        val app = AppState(engine, ProgressStore(ctx).also { it.reset() })
         compose.setContent { RustleTheme { RustleApp(app) } }
 
         compose.onNodeWithText("Level 1").assertIsDisplayed()
@@ -91,7 +82,7 @@ class FlowTest {
         compose.waitForIdle()
         compose.onNodeWithText("GOT IT").assertIsDisplayed().performClick()
         compose.waitForIdle()
-        val choice = first.steps[1] as ChoiceStep
+        val choice = first.steps[1].content as StepContent.Choice
         compose.onNodeWithText(choice.answer).performClick()
         compose.onNodeWithText("CHECK").performClick()
         compose.waitForIdle()

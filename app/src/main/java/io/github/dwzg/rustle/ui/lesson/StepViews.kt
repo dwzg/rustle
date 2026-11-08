@@ -37,13 +37,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.dwzg.rustle.course.Answer
-import io.github.dwzg.rustle.course.BugStep
-import io.github.dwzg.rustle.course.ChoiceStep
-import io.github.dwzg.rustle.course.CompilesStep
-import io.github.dwzg.rustle.course.ExplainStep
-import io.github.dwzg.rustle.course.FillStep
-import io.github.dwzg.rustle.course.OrderStep
+import io.github.dwzg.rustle.core.Answer
+import io.github.dwzg.rustle.core.Step
+import io.github.dwzg.rustle.core.StepContent
 import io.github.dwzg.rustle.ui.code.CodeBlock
 import io.github.dwzg.rustle.ui.code.CodeColors
 import io.github.dwzg.rustle.ui.code.CodePanel
@@ -76,20 +72,20 @@ private fun Prompt(kicker: String, text: String) {
 }
 
 @Composable
-fun ExplainView(step: ExplainStep) {
+fun ExplainView(step: Step, c: StepContent.Explain) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Ferris(size = 56.dp, mood = FerrisMood.Thinking)
             Spacer(Modifier.width(12.dp))
-            Text(step.title, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+            Text(step.prompt, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
         }
-        MarkdownBody(step.body)
+        MarkdownBody(c.body)
     }
 }
 
 @Composable
-fun ChoiceView(step: ChoiceStep, feedback: Feedback?, onAnswer: (Answer?) -> Unit) {
-    val options = remember(step) { (step.wrong + step.answer).shuffled() }
+fun ChoiceView(step: Step, c: StepContent.Choice, feedback: Feedback?, onAnswer: (Answer?) -> Unit) {
+    val options = remember(step) { (c.wrong + c.answer).shuffled() }
     var selected by remember(step) { mutableStateOf<String?>(null) }
     // Prose options may contain `inline code`; only bare code options get a monospace font.
     val mono = options.none { '`' in it } && options.any { codeish.containsMatchIn(it) }
@@ -97,12 +93,12 @@ fun ChoiceView(step: ChoiceStep, feedback: Feedback?, onAnswer: (Answer?) -> Uni
     val bad = RustleTheme.colors.error
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Prompt("Choose the answer", step.prompt)
-        step.code?.let { CodeBlock(it) }
+        c.code?.let { CodeBlock(it) }
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             options.forEach { opt ->
                 val tint = when {
                     feedback == null -> null
-                    opt == step.answer -> ok
+                    opt == c.answer -> ok
                     opt == selected -> bad
                     else -> null
                 }
@@ -129,11 +125,11 @@ private data class BankToken(val id: Int, val text: String)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun FillView(step: FillStep, feedback: Feedback?, onAnswer: (Answer?) -> Unit) {
+fun FillView(step: Step, c: StepContent.Fill, feedback: Feedback?, onAnswer: (Answer?) -> Unit) {
     val bank = remember(step) {
-        (step.answers + step.distractors).mapIndexed { i, t -> BankToken(i, t) }.shuffled()
+        (c.answers + c.distractors).mapIndexed { i, t -> BankToken(i, t) }.shuffled()
     }
-    val slots = remember(step) { mutableStateListOf<BankToken?>().apply { repeat(step.answers.size) { add(null) } } }
+    val slots = remember(step) { mutableStateListOf<BankToken?>().apply { repeat(c.answers.size) { add(null) } } }
     val active = slots.indexOfFirst { it == null }.takeIf { it >= 0 }
 
     LaunchedEffect(slots.toList()) {
@@ -145,13 +141,13 @@ fun FillView(step: FillStep, feedback: Feedback?, onAnswer: (Answer?) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Prompt("Fill in the blanks", step.prompt)
         FillCodeBlock(
-            code = step.code,
+            code = c.code,
             filled = slots.map { it?.text },
             active = if (feedback == null) active else null,
             onSlotClick = { i -> if (feedback == null) slots[i] = null },
             slotColor = { i ->
                 if (feedback == null) null
-                else if (slots.getOrNull(i)?.text == step.answers[i]) ok else bad
+                else if (slots.getOrNull(i)?.text == c.answers[i]) ok else bad
             },
         )
         FlowRow(
@@ -192,9 +188,9 @@ private fun TokenChip(text: String, used: Boolean, enabled: Boolean, onClick: ()
 private data class PoolLine(val id: Int, val text: String)
 
 @Composable
-fun OrderView(step: OrderStep, feedback: Feedback?, onAnswer: (Answer?) -> Unit) {
+fun OrderView(step: Step, c: StepContent.Order, feedback: Feedback?, onAnswer: (Answer?) -> Unit) {
     val pool = remember(step) {
-        val lines = step.lines.mapIndexed { i, l -> PoolLine(i, l) }
+        val lines = c.lines.mapIndexed { i, l -> PoolLine(i, l) }
         var shuffled = lines.shuffled()
         var tries = 0
         while (shuffled.map { it.text.trim() } == lines.map { it.text.trim() } && tries++ < 10) shuffled = lines.shuffled()
@@ -222,7 +218,7 @@ fun OrderView(step: OrderStep, feedback: Feedback?, onAnswer: (Answer?) -> Unit)
                 placed.forEachIndexed { i, line ->
                     val tint = when {
                         feedback == null -> Color.Transparent
-                        line.text.trim() == step.lines[i].trim() -> ok.copy(alpha = 0.18f)
+                        line.text.trim() == c.lines[i].trim() -> ok.copy(alpha = 0.18f)
                         else -> bad.copy(alpha = 0.22f)
                     }
                     Row(
@@ -265,18 +261,18 @@ fun OrderView(step: OrderStep, feedback: Feedback?, onAnswer: (Answer?) -> Unit)
 private fun RustHighlighterOnSurface(text: String) = androidx.compose.ui.text.AnnotatedString(text)
 
 @Composable
-fun CompilesView(step: CompilesStep, feedback: Feedback?, onAnswer: (Answer?) -> Unit) {
+fun CompilesView(step: Step, c: StepContent.Compiles, feedback: Feedback?, onAnswer: (Answer?) -> Unit) {
     var choice by remember(step) { mutableStateOf<Boolean?>(null) }
     val ok = RustleTheme.colors.success
     val bad = RustleTheme.colors.error
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Prompt("Compiler says…", step.prompt)
-        CodeBlock(step.code)
+        CodeBlock(c.code)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             listOf(true to "✅  Compiles", false to "💥  Error").forEach { (value, label) ->
                 val tint = when {
                     feedback == null -> null
-                    value == step.compiles -> ok
+                    value == c.compiles -> ok
                     value == choice -> bad
                     else -> null
                 }
@@ -300,7 +296,7 @@ fun CompilesView(step: CompilesStep, feedback: Feedback?, onAnswer: (Answer?) ->
 }
 
 @Composable
-fun BugView(step: BugStep, feedback: Feedback?, onAnswer: (Answer?) -> Unit) {
+fun BugView(step: Step, c: StepContent.Bug, feedback: Feedback?, onAnswer: (Answer?) -> Unit) {
     var line by remember(step) { mutableStateOf<Int?>(null) }
     val ok = RustleTheme.colors.success
     val bad = RustleTheme.colors.error
@@ -312,11 +308,11 @@ fun BugView(step: BugStep, feedback: Feedback?, onAnswer: (Answer?) -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         CodeBlock(
-            step.code,
+            c.code,
             onLineClick = if (feedback == null) { n -> line = n; onAnswer(Answer.Line(n)) } else null,
             lineTint = { n ->
                 when {
-                    feedback != null && n == step.bugLine -> ok.copy(alpha = 0.25f)
+                    feedback != null && n == c.bugLine -> ok.copy(alpha = 0.25f)
                     feedback != null && n == line -> bad.copy(alpha = 0.25f)
                     n == line -> CodeColors.Selected
                     else -> Color.Transparent

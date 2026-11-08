@@ -3,12 +3,17 @@ package io.github.dwzg.rustle.data
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import io.github.dwzg.rustle.core.Progress
+import io.github.dwzg.rustle.core.newProgress
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.time.LocalDate
 
-/** Persists [Progress] in SharedPreferences and exposes it as a flow. */
+/**
+ * Persists [Progress] in SharedPreferences and exposes it as a flow.
+ * The rules for changing it live in the Rust core; this is just storage.
+ */
 class ProgressStore(context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("rustle_progress", Context.MODE_PRIVATE)
@@ -25,7 +30,7 @@ class ProgressStore(context: Context) {
         _progress.value = next
     }
 
-    fun reset() = update { Progress() }
+    fun reset() = update { newProgress() }
 
     var playgroundCode: String?
         get() = prefs.getString(K_CODE, null)
@@ -46,7 +51,7 @@ class ProgressStore(context: Context) {
         rushGames = prefs.getInt(K_RUSH_GAMES, 0),
         playgroundRuns = prefs.getInt(K_RUNS, 0),
         practiceSessions = prefs.getInt(K_PRACTICE, 0),
-        mistakes = prefs.getStringSet(K_MISTAKES, emptySet()).orEmpty().toSet(),
+        mistakes = prefs.getStringSet(K_MISTAKES, emptySet()).orEmpty().sorted(),
         answered = prefs.getInt(K_ANSWERED, 0),
         answeredCorrect = prefs.getInt(K_CORRECT, 0),
         unlockAll = prefs.getBoolean(K_UNLOCK_ALL, false),
@@ -63,7 +68,7 @@ class ProgressStore(context: Context) {
         putInt(K_RUSH_GAMES, p.rushGames)
         putInt(K_RUNS, p.playgroundRuns)
         putInt(K_PRACTICE, p.practiceSessions)
-        putStringSet(K_MISTAKES, p.mistakes)
+        putStringSet(K_MISTAKES, p.mistakes.toSet())
         putInt(K_ANSWERED, p.answered)
         putInt(K_CORRECT, p.answeredCorrect)
         putBoolean(K_UNLOCK_ALL, p.unlockAll)

@@ -4,9 +4,15 @@ Every unit of the course is one plain-text file in
 `app/src/main/assets/course/`, named `NN-slug.md` (e.g. `03-ownership.md`).
 Files are loaded in filename order.
 
-Run `python3 tools/verify_course.py` after editing. It checks the structure
+Run the verifier after editing:
+
+```sh
+cargo run --release --manifest-path core/Cargo.toml --bin verify-course -- --warnings
+```
+
+It uses the same Rust parser as the app (`core/`), checks the content rules,
 and compiles/runs every snippet that carries a check flag with `rustc`
-(edition 2024).
+(edition 2024). Pass file prefixes (e.g. `03 04`) to check only some units.
 
 ## Structure
 
