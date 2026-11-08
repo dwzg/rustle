@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group android:translateX="24" android:translateY="30" android:scaleX="0.6" android:scaleY="0.6">
+        <!-- legs -->
+        <path android:strokeColor="#B83A00" android:strokeWidth="5" android:strokeLineCap="round"
+            android:pathData="M36,60 Q28,66 30,74 M28,60 Q19,66 22,75 M64,60 Q72,66 70,74 M72,60 Q81,66 78,75" />
+        <!-- arms -->
+        <path android:strokeColor="#B83A00" android:strokeWidth="5" android:strokeLineCap="round"
+            android:pathData="M20,50 L9,32 M80,50 L91,32" />
+        <!-- claws -->
+        <path android:fillColor="#F74C00" android:pathData="M9,30 m-9,0 a9,9 0 1,0 18,0 L13,23 L9,30 L5,22 Z" />
+        <path android:fillColor="#F74C00" android:pathData="M91,30 m-9,0 a9,9 0 1,0 18,0 L95,22 L91,30 L87,23 Z" />
+        <!-- shell -->
+        <path android:fillColor="#F74C00" android:strokeColor="#B83A00" android:strokeWidth="1.6"
+            android:pathData="M16,56 Q13,42 24,38 L28.3,32 L32.7,38 L37,29 L41.3,38 L45.7,29 L50,38 L54.3,29 L58.7,38 L63,29 L67.3,38 L71.7,32 L76,38 Q87,42 84,56 Q50,76 16,56 Z" />
+        <!-- eye stalks -->
+        <path android:strokeColor="#B83A00" android:strokeWidth="3" android:strokeLineCap="round"
+            android:pathData="M42,36 L40,24 M58,36 L60,24" />
+        <!-- eyes -->
+        <path android:fillColor="#FFFFFF" android:pathData="M40,24 m-6.5,0 a6.5,6.5 0 1,0 13,0 a6.5,6.5 0 1,0 -13,0 Z" />
+        <path android:fillColor="#FFFFFF" android:pathData="M60,24 m-6.5,0 a6.5,6.5 0 1,0 13,0 a6.5,6.5 0 1,0 -13,0 Z" />
+        <path android:fillColor="#1A0E08" android:pathData="M40,24.5 m-3.4,0 a3.4,3.4 0 1,0 6.8,0 a3.4,3.4 0 1,0 -6.8,0 Z" />
+        <path android:fillColor="#1A0E08" android:pathData="M60,24.5 m-3.4,0 a3.4,3.4 0 1,0 6.8,0 a3.4,3.4 0 1,0 -6.8,0 Z" />
+        <!-- smile -->
+        <path android:strokeColor="#1A0E08" android:strokeWidth="2.2" android:strokeLineCap="round"
+            android:pathData="M45,48 Q50,53 55,48" />
+    </group>
+</vector>

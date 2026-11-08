@@ -50,7 +50,23 @@ kotlin {
     }
 }
 
+// Robolectric's Android runtime jar, fetched by Gradle so tests can run offline.
+val robolectricRuntime: Configuration by configurations.creating
+
+val prepareRobolectric by tasks.registering(Copy::class) {
+    from(robolectricRuntime)
+    into(layout.buildDirectory.dir("robolectric-jars"))
+}
+
+tasks.withType<Test>().configureEach {
+    dependsOn(prepareRobolectric)
+    systemProperty("robolectric.offline", "true")
+    systemProperty("robolectric.dependency.dir", layout.buildDirectory.dir("robolectric-jars").get().asFile.absolutePath)
+}
+
 dependencies {
+    robolectricRuntime(libs.robolectric.android.all)
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)

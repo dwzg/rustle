@@ -234,10 +234,7 @@ def rustc(code, workdir, run):
     out = Path(workdir) / "main"
     cmd = ["rustc", "--edition", "2024", "-A", "warnings", "--error-format=json",
            "-o", str(out), str(src)]
-    if not run:
-        cmd[1:1] = ["--emit=metadata"]
-        cmd = [c for c in cmd if c not in ("-o", str(out))]
-        cmd += ["--out-dir", str(workdir)]
+    # Always build fully: some errors (e.g. overflow lints) only fire during codegen.
     p = subprocess.run(cmd, capture_output=True, text=True, cwd=workdir, timeout=120)
     diags = [json.loads(l) for l in p.stderr.splitlines() if l.startswith("{")]
     errs = [d for d in diags if d.get("level") == "error"]
